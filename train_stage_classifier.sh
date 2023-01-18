@@ -1,0 +1,9 @@
+python3 stage_classifier.py --preprocessed_data_path='/home/yinhong/Documents/datasets/recipe1m+/preprocessed_data/' \
+                            --model_saving_path='model-checkpoint/classifier_results/' \
+                            --lr=8e-5 \
+                            --l2_decay=0.01 \
+                            --epoch=3 \
+                            --batch_size=300 \
+                            --save_steps=15000 \
+                            --eval_steps=10000 \
+                            --warmup_steps=500
