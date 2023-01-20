@@ -30,31 +30,27 @@ class RecipeGenerationDataset(Dataset):
     def __init__(self, tokenizer, data_path, max_len):
         self.tokenizer = tokenizer
         self.max_length = max_len
-        
-        self.encoded_data = self._load_file(data_path)
-
-        # self.encoded_data = encoded_x
-        # self.labels = labels
+        self.data_text, self.data_label = self._load_file(data_path)
 
     def __len__(self):
-        return len(self.encoded_data['input_ids'])
+        return len(self.data_text)
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.encoded_data.items()}
-        return item
+        tokenized_data = self.tokenizer(self.data_text[idx], 
+                                        padding='max_length', 
+                                        truncation=True, 
+                                        max_length=self.max_length+1,
+                                        return_tensors='pt'
+                                        )
+        encoded_data = {key: val[:,:-1].squeeze(0) for key, val in tokenized_data.items()} # This includes input_ids and attention_mask
+        encoded_data['labels'] = tokenized_data['input_ids'][:,1:].squeeze(0)
+        return encoded_data
 
     def _load_file(self, path):
         print ('Processing {}'.format(path))
         with open(path) as json_file:
             data = json.load(json_file)
-        # data = data[:10000] # only for debugging
-
-        tokenized_data = self.tokenizer(data, padding=True, truncation=True, max_length=self.max_length+1)
-        encoded_data = {key: torch.tensor(val)[:,:-1] for key, val in tokenized_data.items()} # This includes input_ids and attention_mask
-        encoded_data['labels'] = torch.tensor(tokenized_data['input_ids'])[:,1:]
-        # self.labels = tokenized_data[:,1:]
-        return encoded_data
-
+        return data['text'], data['stage_label']
 
 # class Data:
 #     def __init__(self, model_name, train_path, dev_path, test_path, max_len):

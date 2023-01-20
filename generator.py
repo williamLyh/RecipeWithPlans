@@ -25,7 +25,7 @@ train_fct = CrossEntropyLoss()
 val_fct = CrossEntropyLoss(reduction='none')
 
 class RecipeGenerator(nn.Module):
-    def __init__(self, model_name, tokenizer, device=None):
+    def __init__(self, model_name, tokenizer, device=None, classifier_path=None):
         super(RecipeGenerator, self).__init__()
         # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer = tokenizer
@@ -40,16 +40,20 @@ class RecipeGenerator(nn.Module):
         self.pad_token_id = tokenizer.pad_token_id
         # self.embeddings = load_embeddings('/mnt/nas_home/yl535/fasttext_embeddings/crawl-300d-2M.vec')
         self.embeddings = self.model.transformer.wte.weight.detach()
-        self.BOW_embeddings = self._load_BOW_embedding()
+
+        if classifier_path:
+            self.stage_classifier = StageClassifierModule(classifier_path, self.device)
+
+        # self.BOW_embeddings = self._load_BOW_embedding()
 
 
-    def compute_logits_and_hidden_states(self, input_ids):
-        # used for advanced decoding
-        # input_ids: 1 x seqlen
-        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
-        last_hidden_states = outputs.hidden_states[-1]
-        logits = outputs.logits
-        return last_hidden_states, logits
+    # def compute_logits_and_hidden_states(self, input_ids):
+    #     # used for advanced decoding
+    #     # input_ids: 1 x seqlen
+    #     outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+    #     last_hidden_states = outputs.hidden_states[-1]
+    #     logits = outputs.logits
+    #     return last_hidden_states, logits
 
     def forward(self, input_ids, attention_mask, labels, margin):
         bsz, seqlen = input_ids.size()
@@ -66,21 +70,21 @@ class RecipeGenerator(nn.Module):
         cl_loss = contrastive_loss(margin, cosine_scores, input_ids, self.pad_token_id, prefix_len=0)
         return mle_loss, cl_loss
 
-    def eval_loss(self, input_ids, labels):
-        bsz, seqlen = input_ids.size()
-        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
-        logits = outputs.logits
-        assert logits.size() == torch.Size([bsz, seqlen, self.vocab_size])
-        last_hidden_states = outputs.hidden_states[-1]
-        assert last_hidden_states.size() == torch.Size([bsz, seqlen, self.embed_dim])
-        mle_loss = val_fct(logits.view(-1, self.vocab_size), labels.view(-1))
-        assert mle_loss.size() == torch.Size([bsz * seqlen])
-        mask_tmp = labels.masked_fill(~labels.eq(-100), 1.0)
-        mask = mask_tmp.masked_fill(mask_tmp.eq(-100), 0.0)
-        # sum 
-        mle_loss_sum = torch.sum(mle_loss)
-        token_num_sum = torch.sum(mask)
-        return mle_loss_sum, token_num_sum
+    # def eval_loss(self, input_ids, labels):
+    #     bsz, seqlen = input_ids.size()
+    #     outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+    #     logits = outputs.logits
+    #     assert logits.size() == torch.Size([bsz, seqlen, self.vocab_size])
+    #     last_hidden_states = outputs.hidden_states[-1]
+    #     assert last_hidden_states.size() == torch.Size([bsz, seqlen, self.embed_dim])
+    #     mle_loss = val_fct(logits.view(-1, self.vocab_size), labels.view(-1))
+    #     assert mle_loss.size() == torch.Size([bsz * seqlen])
+    #     mask_tmp = labels.masked_fill(~labels.eq(-100), 1.0)
+    #     mask = mask_tmp.masked_fill(mask_tmp.eq(-100), 0.0)
+    #     # sum 
+    #     mle_loss_sum = torch.sum(mle_loss)
+    #     token_num_sum = torch.sum(mask)
+    #     return mle_loss_sum, token_num_sum
 
     def save_model(self, ckpt_save_path):
         import os
@@ -96,38 +100,15 @@ class RecipeGenerator(nn.Module):
     # decoding functions
     # ------------------------------------------------------- #
     @torch.no_grad()
-    # def _load_BOW_embedding(self):
-    #     with open('/mnt/nas_home/yl535/decoding_with_plan/con_search/data/stage_label_data/BOW_dict.json') as json_file:
-    #         BOW_dict = json.load(json_file)
-    #     bag_num = len(BOW_dict)
-
-
-    #     BOW_embedding_dict = {}
-    #     for label, bags in BOW_dict.items():
-    #         bag_embeddings = []
-    #         for word in bags:
-    #             word_id = self.tokenizer(' '+word)['input_ids']
-    #             if len(word_id) ==1: 
-    #                 bag_embeddings.append(list(self.embeddings[word_id[0]]))
-    #             else: # OOV
-    #                 # print('OOV ', word)
-    #                 bag_embeddings.append(list(self.embeddings[word_id[0]]))
-
-    #         BOW_embedding_dict[label] = bag_embeddings
-    #     self.BOW_embeddings = torch.tensor([BOW_embedding_dict[str(idx)] for idx in range(bag_num)])
-    #     return self.BOW_embeddings
-
     def structure_search(self, input_ids, beam_width, alpha, beta, stage_plan, max_length, device=None):
         batch_size, prefix_len = input_ids.size()
         
-        classifier_path = '/mnt/nas_home/yl535/decoding_with_plan/con_search/classifier_results/checkpoint-60000'
-        self.stage_classifier = StageClassifierModule(classifier_path, self.device)
+        # classifier_path = '/mnt/nas_home/yl535/decoding_with_plan/con_search/classifier_results/checkpoint-60000'
+        # self.stage_classifier = StageClassifierModule(classifier_path, self.device)
 
         self.model.eval()
         with torch.no_grad():
             assert alpha >= 0. and alpha <= 1.0
-
-            # external_embeddings = load_embeddings('/mnt/nas_home/yl535/fasttext_embeddings/crawl-300d-2M.vec')
 
             generated = [item for item in input_ids.tolist()]
             past_key_values = None
