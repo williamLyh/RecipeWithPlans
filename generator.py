@@ -23,9 +23,10 @@ from utlis import enlarge_past_key_values, _compute_bag_similarity_scores, _rank
 
 train_fct = CrossEntropyLoss()
 val_fct = CrossEntropyLoss(reduction='none')
-class SimCTG(nn.Module):
+
+class RecipeGenerator(nn.Module):
     def __init__(self, model_name, tokenizer, device=None):
-        super(SimCTG, self).__init__()
+        super(RecipeGenerator, self).__init__()
         # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer = tokenizer
         self.device = device
@@ -95,44 +96,30 @@ class SimCTG(nn.Module):
     # decoding functions
     # ------------------------------------------------------- #
     @torch.no_grad()
-    def _load_BOW_embedding(self):
-        with open('/mnt/nas_home/yl535/decoding_with_plan/con_search/data/stage_label_data/BOW_dict.json') as json_file:
-            BOW_dict = json.load(json_file)
-        bag_num = len(BOW_dict)
+    # def _load_BOW_embedding(self):
+    #     with open('/mnt/nas_home/yl535/decoding_with_plan/con_search/data/stage_label_data/BOW_dict.json') as json_file:
+    #         BOW_dict = json.load(json_file)
+    #     bag_num = len(BOW_dict)
 
-        # # BOW_dict
-        # BOW_embedding_dict = {}
-        # for label, bags in BOW_dict.items():
-        #     bag_embeddings = []
-        #     for word in bags:
-        #         if word not in self.embeddings:
-        #             bag_embeddings.append(list(self.embeddings['UNK']))
-        #         else:
-        #             bag_embeddings.append(list(self.embeddings[word]))
-        #     BOW_embedding_dict[label] = bag_embeddings
-        # self.BOW_embeddings = torch.tensor([BOW_embedding_dict[str(idx)] for idx in range(7)])
 
-        BOW_embedding_dict = {}
-        for label, bags in BOW_dict.items():
-            bag_embeddings = []
-            for word in bags:
-                word_id = self.tokenizer(' '+word)['input_ids']
-                if len(word_id) ==1: 
-                    bag_embeddings.append(list(self.embeddings[word_id[0]]))
-                else: # OOV
-                    # print('OOV ', word)
-                    bag_embeddings.append(list(self.embeddings[word_id[0]]))
+    #     BOW_embedding_dict = {}
+    #     for label, bags in BOW_dict.items():
+    #         bag_embeddings = []
+    #         for word in bags:
+    #             word_id = self.tokenizer(' '+word)['input_ids']
+    #             if len(word_id) ==1: 
+    #                 bag_embeddings.append(list(self.embeddings[word_id[0]]))
+    #             else: # OOV
+    #                 # print('OOV ', word)
+    #                 bag_embeddings.append(list(self.embeddings[word_id[0]]))
 
-            BOW_embedding_dict[label] = bag_embeddings
-        self.BOW_embeddings = torch.tensor([BOW_embedding_dict[str(idx)] for idx in range(bag_num)])
-        return self.BOW_embeddings
+    #         BOW_embedding_dict[label] = bag_embeddings
+    #     self.BOW_embeddings = torch.tensor([BOW_embedding_dict[str(idx)] for idx in range(bag_num)])
+    #     return self.BOW_embeddings
 
     def structure_search(self, input_ids, beam_width, alpha, beta, stage_plan, max_length, device=None):
         batch_size, prefix_len = input_ids.size()
         
-
-        # if device:
-        #     self.BOW_embeddings = self.BOW_embeddings.to(torch.device('cuda'))
         classifier_path = '/mnt/nas_home/yl535/decoding_with_plan/con_search/classifier_results/checkpoint-60000'
         self.stage_classifier = StageClassifierModule(classifier_path, self.device)
 
@@ -288,45 +275,45 @@ class SimCTG(nn.Module):
         return next_id, past_key_values, last_hidden_states, logits 
 
     @torch.no_grad()
-    def fast_contrastive_search(self, input_ids, beam_width, alpha, decoding_len):
-        '''
-           input_ids: prefix input; 1 x prefix_len
-           decoding_len: how many tokens to generate
-           beam_width: size of candidate pool during decoding
-           alpha: regulates importance of model confidence and degeneration penalty
-        '''
-        self.model.eval()
-        from utlis import ContrastiveDecodingOneStepFast
-        # sanity check
-        assert alpha >= 0. and alpha <= 1.0
+    # def fast_contrastive_search(self, input_ids, beam_width, alpha, decoding_len):
+    #     '''
+    #        input_ids: prefix input; 1 x prefix_len
+    #        decoding_len: how many tokens to generate
+    #        beam_width: size of candidate pool during decoding
+    #        alpha: regulates importance of model confidence and degeneration penalty
+    #     '''
+    #     self.model.eval()
+    #     from utlis import ContrastiveDecodingOneStepFast
+    #     # sanity check
+    #     assert alpha >= 0. and alpha <= 1.0
         
-        # fast mode
-        batch_size, seqlen = input_ids.size()
-        #generated = [[] for _ in range(batch_size)]
-        generated = [item for item in input_ids.tolist()]
-        past_key_values = None
-        last_hidden_states = None
-        logits = None
-        for step in range(decoding_len):
-            input_ids, past_key_values, last_hidden_states, logits = ContrastiveDecodingOneStepFast(
-                self.model,
-                input_ids,
-                beam_width,
-                alpha,
-                past_key_values,
-                last_hidden_states,
-                self.tokenizer,
-                logits,
-                first_step=step == 0,
-            )
-            tokens = input_ids.squeeze(dim=-1).tolist()
-            for idx, t in enumerate(tokens):
-                generated[idx].append(t)
+    #     # fast mode
+    #     batch_size, seqlen = input_ids.size()
+    #     #generated = [[] for _ in range(batch_size)]
+    #     generated = [item for item in input_ids.tolist()]
+    #     past_key_values = None
+    #     last_hidden_states = None
+    #     logits = None
+    #     for step in range(decoding_len):
+    #         input_ids, past_key_values, last_hidden_states, logits = ContrastiveDecodingOneStepFast(
+    #             self.model,
+    #             input_ids,
+    #             beam_width,
+    #             alpha,
+    #             past_key_values,
+    #             last_hidden_states,
+    #             self.tokenizer,
+    #             logits,
+    #             first_step=step == 0,
+    #         )
+    #         tokens = input_ids.squeeze(dim=-1).tolist()
+    #         for idx, t in enumerate(tokens):
+    #             generated[idx].append(t)
                 
-            if input_ids == self.tokenizer.pad_token_id:
-                break
-        # print(len(generated), len(generated[0]))
-        return generated[0]
+    #         if input_ids == self.tokenizer.pad_token_id:
+    #             break
+    #     # print(len(generated), len(generated[0]))
+    #     return generated[0]
 
 
     def greedy_search(self, input_ids, decoding_len):
@@ -393,7 +380,7 @@ if __name__=='__main__':
     tokenizer = load_tokenizer(tokenizer_name, stage_specified=False)
 
     device = torch.device('cuda')
-    model = SimCTG("./con_search/simctg-checkpoint/checkpoint-90000", tokenizer=tokenizer, device=device)
+    model = RecipeGenerator("./con_search/simctg-checkpoint/checkpoint-90000", tokenizer=tokenizer, device=device)
     model.eval()
 
     # device = torch.device('cuda')

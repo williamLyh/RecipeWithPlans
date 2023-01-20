@@ -16,12 +16,11 @@ import torch
 import argparse 
 
 def extract_title_ingr(input_text):
-    result_text = input_text.split('<TITLE_START> ')[1].split(' <TITLE_END> ')[0]
-
-    input_text = input_text.split('<INGR_START> ')[1].split(' <INGR_END>')[0]
+    result_text = input_text.split('<TITLE_START>')[1].split('<TITLE_END>')[0]
+    input_text = input_text.split('<INGR_START>')[1].split('<INGR_END>')[0]
     ingrs = input_text.split('<INGR_NEXT>')
-    result_text += ''.join(ingrs)
-    return result_text
+    result_text += '.' + ','.join(ingrs) +'.'
+    return result_text.strip()
 
 def compute_tf(vocab, vocab_word2int, doc_word_count_for_plan_length):
     tf = np.zeros((len(vocab), len(doc_word_count_for_plan_length)))
@@ -72,19 +71,20 @@ class PlannerDataset(Dataset):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', choices=('True','False'), default=False,
+    parser.add_argument('--train', choices=('True','False'), default='False',
                     help='If to train the planner model')
-    parser.add_argument('--predict', choices=('True','False'), default=False,
+    parser.add_argument('--predict', choices=('True','False'), default='False',
                         help='If to predict the stage plan of test data')
-    parser.add_argument('--preprocessed_data_path', help='The path to the preprocessed data.')
+    parser.add_argument('--preprocessed_data_path', help='The path to the preprocessed data.', default='')
     parser.add_argument('--model_saving_path', help='The path to save the trained model.', default='')
     parser.add_argument('--trained_model_path', help='The path of the trained planner, for prediction.', default='')
-    parser.add_argument('--lr', type=float)
-    parser.add_argument('--l2_decay', type=float)
-    parser.add_argument('--epoch', type=int)
+    parser.add_argument('--lr', type=float, default=5e-5)
+    parser.add_argument('--l2_decay', type=float, default=0.01)
+    parser.add_argument('--epoch', type=int, default=1)
     parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--save_steps', type=int)
-    parser.add_argument('--eval_steps', type=int)
+    parser.add_argument('--save_steps', type=int, default=2000)
+    parser.add_argument('--eval_steps', type=int, default=2000)
+    parser.add_argument('--logging_steps', type=int, default=200, help='Print loss every this number of steps.')
     parser.add_argument('--warmup_steps', type=int, default=200)
     args = parser.parse_args()
     args.train = args.train=='True'
@@ -103,20 +103,17 @@ if __name__ == '__main__':
         val_data, val_stage_data = val_data['text'], val_data['stage_label']
 
 
-        # train planner module
-        # special_tokens = ['<0>','<1>', '<2>', '<3>', '<4>', '<5>', '<6>']
-        # stage_tok2id = {tok:idx for idx, tok in enumerate(special_tokens)} 
         model = BartForConditionalGeneration.from_pretrained("facebook/bart-base")#, from_tf=True)
         bart_tok = BartTokenizer.from_pretrained("facebook/bart-base")
         bart_tok.add_tokens(special_tokens, special_tokens=True)
         model.resize_token_embeddings(len(bart_tok)+1)
 
         train_data = [extract_title_ingr(data) for data in train_data]
-        textual_train_plans = [' '.join([special_tokens[id] for id in plan]) for plan in train_stage_data]
+        textual_train_plans = [''.join([special_tokens[id] for id in plan]) for plan in train_stage_data]
         train_stage_data = bart_tok(textual_train_plans, padding=True, truncation=True, return_tensors='pt').input_ids
 
         val_data = [extract_title_ingr(data) for data in val_data]
-        textual_val_plans = [' '.join([special_tokens[id] for id in plan]) for plan in val_stage_data]  
+        textual_val_plans = [''.join([special_tokens[id] for id in plan]) for plan in val_stage_data]  
         val_stage_data = bart_tok(textual_val_plans, padding=True, truncation=True, return_tensors='pt').input_ids
 
         tokenized_train = bart_tok(train_data, padding=True, truncation=True, max_length=128, return_tensors="pt")
@@ -141,6 +138,7 @@ if __name__ == '__main__':
             weight_decay=args.l2_decay,
             save_steps=args.save_steps,
             eval_steps=args.save_steps,
+            logging_steps=args.logging_steps,
             warmup_steps=args.warmup_steps,
             # no_cuda=True
         )
@@ -171,15 +169,15 @@ if __name__ == '__main__':
         bart_tok = BartTokenizer.from_pretrained(args.trained_model_path)
         tokenized_test = bart_tok(test_data, padding=True, truncation=True, max_length=128, return_tensors="pt")
 
-        batch_size = 64
+        # batch_size = 64
         test_predictions = []
-        for idx in tqdm(range(0, len(tokenized_test.input_ids), batch_size)):
-            outputs = model.generate(tokenized_test.input_ids[idx:idx+batch_size].to(device))
+        for idx in tqdm(range(0, len(tokenized_test.input_ids), args.batch_size)):
+            outputs = model.generate(tokenized_test.input_ids[idx:idx+args.batch_size].to(device))
             outputs = bart_tok.batch_decode(outputs)
             outputs = [plan.split('<s> ')[1].split(' </s>')[0].split() for plan in outputs]
             outputs = [[stage_tok2id[stage] for stage in plan_list] for plan_list in outputs]
             test_predictions += outputs
 
-        with open(args.model_saving_path+'test_stage_label_planner_prediction.json', 'w') as f:
+        with open(args.model_saving_path+'planner_prediction_test.json', 'w') as f:
             json.dump({'planner_prediction': test_predictions}, f)
         

@@ -9,37 +9,39 @@ import random
 import numpy as np
 import time
 # import progressbar
-from dataclass import load_tokenizer, RecipeDataset
+from dataclass import load_tokenizer, RecipeGenerationDataset
 from transformers import GPT2Tokenizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import logging
-logging.getLogger('transformers.generation_utils').disabled = True
+from generator import RecipeGenerator
 
-def eval_model(args, model, data, cuda_available, device):
-    dataset_batch_size = args.batch_size_per_gpu * args.number_of_gpu
-    eval_step = int(data.test_num / dataset_batch_size) + 1
-    val_loss, token_sum = 0., 0.
-    model.eval()
-    with torch.no_grad():
-        # p = progressbar.ProgressBar(eval_step)
-        # p.start()
-        for idx in range(eval_step):
-            # p.update(idx)
-            batch_input_tensor, batch_labels, _ = \
-            data.get_next_validation_batch(batch_size=dataset_batch_size, mode='test')
-            if cuda_available:
-                batch_input_tensor = batch_input_tensor.cuda(device)
-                batch_labels = batch_labels.cuda(device)
-            one_val_loss, one_val_token_sum = model.eval_loss(batch_input_tensor, batch_labels)
-            one_val_loss = torch.sum(one_val_loss)
-            one_val_token_sum = torch.sum(one_val_token_sum)
-            val_loss += one_val_loss.item()
-            token_sum += one_val_token_sum.item()
-        # p.finish()
-    model.train()
-    val_loss = val_loss / token_sum
-    return val_loss
+# import logging
+# logging.getLogger('transformers.generation_utils').disabled = True
+
+# def eval_model(args, model, data, cuda_available, device):
+#     dataset_batch_size = args.batch_size_per_gpu * args.number_of_gpu
+#     eval_step = int(data.test_num / dataset_batch_size) + 1
+#     val_loss, token_sum = 0., 0.
+#     model.eval()
+#     with torch.no_grad():
+#         # p = progressbar.ProgressBar(eval_step)
+#         # p.start()
+#         for idx in range(eval_step):
+#             # p.update(idx)
+#             batch_input_tensor, batch_labels, _ = \
+#             data.get_next_validation_batch(batch_size=dataset_batch_size, mode='test')
+#             if cuda_available:
+#                 batch_input_tensor = batch_input_tensor.cuda(device)
+#                 batch_labels = batch_labels.cuda(device)
+#             one_val_loss, one_val_token_sum = model.eval_loss(batch_input_tensor, batch_labels)
+#             one_val_loss = torch.sum(one_val_loss)
+#             one_val_token_sum = torch.sum(one_val_token_sum)
+#             val_loss += one_val_loss.item()
+#             token_sum += one_val_token_sum.item()
+#         # p.finish()
+#     model.train()
+#     val_loss = val_loss / token_sum
+#     return val_loss
 
 def model_training(dataset, model, device, args):
     if os.path.exists(args.ckpt_save_path):
@@ -124,9 +126,12 @@ def parse_config():
     parser = argparse.ArgumentParser()
     # data configuration
     parser.add_argument("--model_name", type=str, default='gpt2')
-    parser.add_argument("--train_data_path", type=str, default='')
-    parser.add_argument("--valid_data_path", type=str, default='')
-    parser.add_argument("--test_data_path", type=str, default='')
+    # parser.add_argument("--train_data_path", type=str, default='')
+    # parser.add_argument("--valid_data_path", type=str, default='')
+    # parser.add_argument("--test_data_path", type=str, default='')
+    parser.add_argument("--data_path", type=str, help="directory to save the model parameters.")
+    parser.add_argument("--save_path", type=str, help="directory to save the model parameters.")
+
     parser.add_argument("--max_len", type=int, default=256)
     # mini-batch training configuration
     parser.add_argument("--batch_size", type=int, default=8)
@@ -141,17 +146,16 @@ def parse_config():
         help="total effective training steps")
     parser.add_argument("--warmup_steps", type=int, default=500,
         help="total effective training steps")
-    parser.add_argument("--print_every_step", type=int, default=1000,
+    parser.add_argument("--print_steps", type=int, default=1000,
         help="how many update steps to print one intermediate result")
-    parser.add_argument("--eval_every_step", type=int, default=5000,
-        help="The model will evaluate the validation set for eval_every_step.")
-    parser.add_argument("--save_every_step", type=int, default=5000,
+    # parser.add_argument("--eval_every_step", type=int, default=5000,
+    #     help="The model will evaluate the validation set for eval_every_step.")
+    parser.add_argument("--save_steps", type=int, default=5000,
         help="how many update steps to save one model")
     # learning configuration
-    parser.add_argument("--learning_rate", type=float, default=8e-5)
+    parser.add_argument("--lr", type=float, default=8e-5)
     parser.add_argument("--margin", type=float, default=0.5)
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--save_path_prefix", type=str, help="directory to save the model parameters.")
     return parser.parse_args()
 
 def load_previous_best_model(path):
@@ -179,23 +183,23 @@ if __name__ == '__main__':
     args = parse_config()
     device = torch.device('cuda')
 
-    args.model_name = 'gpt2'
-    args.train_data_path = '/mnt/nas_home/yl535/decoding_with_plan/data_no_stage_label/train_data.json'
-    args.valid_data_path = '/mnt/nas_home/yl535/decoding_with_plan/data_no_stage_label/val_data.json'
-    args.max_len = 512
+    # args.model_name = 'gpt2'
+    # args.train_data_path = '/mnt/nas_home/yl535/decoding_with_plan/data_no_stage_label/train_data.json'
+    # args.valid_data_path = '/mnt/nas_home/yl535/decoding_with_plan/data_no_stage_label/val_data.json'
+
     print('Loading tokenizer')
     tokenizer = load_tokenizer(args.model_name)
 
     print ('Loading data...')
-    train_dataset = RecipeDataset(tokenizer, args.train_data_path, args.max_len)
+    train_data_path = args.data_path + 'train_dataset.json'
+    train_dataset = RecipeGenerationDataset(tokenizer, args.train_data_path, args.max_len)
     # valid_dataset = RecipeDataset(tokenizer, valid_data_path, max_len)
     print ('Data loaded. {} datapoints'.format(train_dataset.__len__))
 
     print ('############################################################')
     print ('Start Training...')
-    from simctg import SimCTG
     print ('Initializaing SimCTG model...')
-    model = SimCTG(args.model_name, tokenizer)  ###
+    model = RecipeGenerator(args.model_name, tokenizer)  ###
 
     if cuda_available:
         if multi_gpu_training:

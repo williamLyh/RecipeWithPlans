@@ -85,7 +85,8 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', type=int)
     parser.add_argument('--save_steps', type=int)
     parser.add_argument('--eval_steps', type=int)
-    parser.add_argument('--warmup_steps', type=int, default=500)
+    parser.add_argument('--logging_steps', type=int, default=500, help='Print loss every this number of steps.')
+    parser.add_argument('--warmup_steps', type=int, default=200)
     args = parser.parse_args()
 
     train_sentences, train_stage_label = load_dataset(args.preprocessed_data_path+'train_dataset.json', 
@@ -134,6 +135,7 @@ if __name__=='__main__':
         weight_decay=args.l2_decay,
         save_steps=args.save_steps,
         eval_steps=args.eval_steps,
+        logging_steps=args.logging_steps,
         warmup_steps=args.warmup_steps,
     )
 
