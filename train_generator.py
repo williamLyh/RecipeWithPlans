@@ -95,7 +95,7 @@ def model_training(train_dataset, valid_dataset, model, device, args):
     mle_loss_total, cl_loss_total = 0, 0
 
     for epoch in range(args.epoch_number):
-        for batch in tqdm(train_data_loader):
+        for batch in train_data_loader:
             global_step += 1
             pbar.update(1)
             if args.cuda_available:
@@ -125,6 +125,7 @@ def model_training(train_dataset, valid_dataset, model, device, args):
 
             # intermediate evaluation using validation data 
             if global_step % args.eval_steps == 0:
+                print('Start evaluating the model on validation dataset: ')
                 eval_model(args, model, valid_data_loader, device)
 
             # save model
@@ -212,7 +213,7 @@ if __name__ == '__main__':
 
     print ('############################################################')
     print ('Start Training...')
-    print ('Initializaing SimCTG model...')
+    print ('Initializaing RecipeGenerator model...')
     model = RecipeGenerator(args.model_name, tokenizer)  ###
 
     if cuda_available:
