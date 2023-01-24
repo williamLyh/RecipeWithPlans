@@ -14,12 +14,11 @@ from loss_func import contrastive_loss
 from transformers import AutoTokenizer, GPT2LMHeadModel
 from transformers import AutoModelForSequenceClassification
 import time
-from utlis import load_embeddings
 # import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import json
-from utlis import enlarge_past_key_values, _compute_bag_similarity_scores, _ranking, select_past_key_values
+from utlis import enlarge_past_key_values, _ranking, select_past_key_values
 
 train_fct = CrossEntropyLoss()
 val_fct = CrossEntropyLoss(reduction='none')
@@ -70,28 +69,8 @@ class RecipeGenerator(nn.Module):
         cl_loss = contrastive_loss(margin, cosine_scores, input_ids, self.pad_token_id, prefix_len=0)
         return mle_loss, cl_loss
 
-    # def eval_loss(self, input_ids, labels):
-    #     bsz, seqlen = input_ids.size()
-    #     outputs = self.model(input_ids=input_ids, output_hidden_states=True)
-    #     logits = outputs.logits
-    #     assert logits.size() == torch.Size([bsz, seqlen, self.vocab_size])
-    #     last_hidden_states = outputs.hidden_states[-1]
-    #     assert last_hidden_states.size() == torch.Size([bsz, seqlen, self.embed_dim])
-    #     mle_loss = val_fct(logits.view(-1, self.vocab_size), labels.view(-1))
-    #     assert mle_loss.size() == torch.Size([bsz * seqlen])
-    #     mask_tmp = labels.masked_fill(~labels.eq(-100), 1.0)
-    #     mask = mask_tmp.masked_fill(mask_tmp.eq(-100), 0.0)
-    #     # sum 
-    #     mle_loss_sum = torch.sum(mle_loss)
-    #     token_num_sum = torch.sum(mask)
-    #     return mle_loss_sum, token_num_sum
 
     def save_model(self, ckpt_save_path):
-        import os
-        if os.path.exists(ckpt_save_path):
-            pass
-        else: # recursively construct directory
-            os.makedirs(ckpt_save_path, exist_ok=True)
         # save model
         self.model.save_pretrained(ckpt_save_path)
         # save tokenizer
@@ -100,15 +79,10 @@ class RecipeGenerator(nn.Module):
     # decoding functions
     # ------------------------------------------------------- #
     @torch.no_grad()
-    def structure_search(self, input_ids, beam_width, alpha, beta, stage_plan, max_length, device=None):
-        batch_size, prefix_len = input_ids.size()
-        
-        # classifier_path = '/mnt/nas_home/yl535/decoding_with_plan/con_search/classifier_results/checkpoint-60000'
-        # self.stage_classifier = StageClassifierModule(classifier_path, self.device)
-
+    def structure_search(self, input_ids, beam_width, alpha, beta, stage_plan, max_length):
         self.model.eval()
         with torch.no_grad():
-            assert alpha >= 0. and alpha <= 1.0
+            # assert alpha >= 0. and alpha <= 1.0
 
             generated = [item for item in input_ids.tolist()]
             past_key_values = None
@@ -206,27 +180,15 @@ class RecipeGenerator(nn.Module):
         context_hidden = context_hidden.reshape(bsz*beam_width, -1, embed_dim)  # [B*K, S, E]
         
         # Stage score computation
-        # word_candidates = [self.tokenizer.decode(id).strip() for id in top_k_ids.view(-1)]
-        # word_candidates = torch.tensor([self.embeddings[word] if (word in self.embeddings) else self.embeddings['unk'] for word in word_candidates]) 
-        
         context_length = len(generated_context)
         sent_candidates = torch.tensor(generated_context).expand(beam_width, context_length) # [K, CL] here assume BSZ is 1
         if self.device:
             sent_candidates = sent_candidates.to(self.device)
         sent_candidates = torch.cat((sent_candidates, top_k_ids.view(-1, 1)), dim=1)
         sent_candidates_raw = [self.tokenizer.decode(sent) for sent in sent_candidates]
-        print('candidiates', sent_candidates_raw)
+        # print('candidiates', sent_candidates_raw)
         candidate_stage_scores = self.stage_classifier.compute_bert_stage_scores(sent_candidates_raw)
-        # print(sent_candidates_raw, candidate_stage_scores)
-        # print(stage_flag)
         candidate_stage_scores= candidate_stage_scores[:,stage_flag] 
-
-        # word_candidates = top_k_ids.view(-1)
-        # word_candidates = self.embeddings[word_candidates]
-        # candidate_bag_similarites = _compute_bag_similarity_scores(word_candidates, self.BOW_embeddings)
-        # candidate_bag_scores = candidate_bag_similarites[:,stage_flag]      # [B*K]
-        # print(candidate_bag_similarites, candidate_bag_scores)
-
 
         # Stage-aware and contrastive searching
         # print(context_hidden.shape, next_hidden.shape, top_k_probs.shape)
@@ -239,9 +201,8 @@ class RecipeGenerator(nn.Module):
             candidate_stage_scores,
             # candidate_bag_scores,
         )     # [B]
-        print('--------------------------------------------------')
+        # print('--------------------------------------------------')
         # Prepare for outputs
-        # print(selected_idx.shape, len(top_k_ids))
         next_id = top_k_ids[range(len(top_k_ids)), selected_idx].unsqueeze(-1)    # [B, 1]
         # early stop
         # if (next_id.shape[0] == 1) and next_id==self.tokenizer.pad_token_id :
@@ -256,47 +217,6 @@ class RecipeGenerator(nn.Module):
         return next_id, past_key_values, last_hidden_states, logits 
 
     @torch.no_grad()
-    # def fast_contrastive_search(self, input_ids, beam_width, alpha, decoding_len):
-    #     '''
-    #        input_ids: prefix input; 1 x prefix_len
-    #        decoding_len: how many tokens to generate
-    #        beam_width: size of candidate pool during decoding
-    #        alpha: regulates importance of model confidence and degeneration penalty
-    #     '''
-    #     self.model.eval()
-    #     from utlis import ContrastiveDecodingOneStepFast
-    #     # sanity check
-    #     assert alpha >= 0. and alpha <= 1.0
-        
-    #     # fast mode
-    #     batch_size, seqlen = input_ids.size()
-    #     #generated = [[] for _ in range(batch_size)]
-    #     generated = [item for item in input_ids.tolist()]
-    #     past_key_values = None
-    #     last_hidden_states = None
-    #     logits = None
-    #     for step in range(decoding_len):
-    #         input_ids, past_key_values, last_hidden_states, logits = ContrastiveDecodingOneStepFast(
-    #             self.model,
-    #             input_ids,
-    #             beam_width,
-    #             alpha,
-    #             past_key_values,
-    #             last_hidden_states,
-    #             self.tokenizer,
-    #             logits,
-    #             first_step=step == 0,
-    #         )
-    #         tokens = input_ids.squeeze(dim=-1).tolist()
-    #         for idx, t in enumerate(tokens):
-    #             generated[idx].append(t)
-                
-    #         if input_ids == self.tokenizer.pad_token_id:
-    #             break
-    #     # print(len(generated), len(generated[0]))
-    #     return generated[0]
-
-
     def greedy_search(self, input_ids, decoding_len):
         _, prefix_len = input_ids.size()
         output = self.model.generate(

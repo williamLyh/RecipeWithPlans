@@ -39,11 +39,12 @@ class RecipeGenerationDataset(Dataset):
         tokenized_data = self.tokenizer(self.data_text[idx], 
                                         padding='max_length', 
                                         truncation=True, 
-                                        max_length=self.max_length+1,
+                                        max_length=self.max_length,
                                         return_tensors='pt'
                                         )
-        encoded_data = {key: val[:,:-1].squeeze(0) for key, val in tokenized_data.items()} # This includes input_ids and attention_mask
-        encoded_data['labels'] = tokenized_data['input_ids'][:,1:].squeeze(0)
+        encoded_data = {key: val.squeeze(0) for key, val in tokenized_data.items()} # This includes input_ids and attention_mask
+        # encoded_data = {key: val[:,:-1].squeeze(0) for key, val in tokenized_data.items()} # This includes input_ids and attention_mask
+        # encoded_data['labels'] = tokenized_data['input_ids'][:,1:].squeeze(0)
         return encoded_data
 
     def _load_file(self, path):

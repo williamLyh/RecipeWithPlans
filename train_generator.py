@@ -130,7 +130,7 @@ def model_training(train_dataset, valid_dataset, model, device, args):
 
             # save model
             if global_step % args.save_steps ==0 :
-                full_ckpt_save_path = args.save_path + '/checkpoint-{}'.format(global_step)
+                full_ckpt_save_path = args.save_path + 'checkpoint-{}'.format(global_step)
                 print('Saving model at ' + full_ckpt_save_path)
 
                 if os.path.exists(full_ckpt_save_path):
@@ -139,9 +139,9 @@ def model_training(train_dataset, valid_dataset, model, device, args):
                     os.makedirs(full_ckpt_save_path, exist_ok=True)
                 # save model
                 if args.multi_gpu_training:
-                    model.module.model.save_pretrained(full_ckpt_save_path)
+                    model.module.save_model(full_ckpt_save_path)
                 else:
-                    model.model.save_pretrained(full_ckpt_save_path)
+                    model.save_model(full_ckpt_save_path)
     pbar.close()
     return model
 ################################################################################################################################################
@@ -160,8 +160,7 @@ def parse_config():
     parser.add_argument("--epoch_number", type=int, default=1)
 
     # pre-training configuration
-    # parser.add_argument("--total_steps", type=int, default=50000,
-    #     help="total effective training steps")
+
     parser.add_argument("--warmup_steps", type=int, default=500,
         help="total effective training steps")
     parser.add_argument("--print_steps", type=int, default=1000,
@@ -198,8 +197,9 @@ if __name__ == '__main__':
             print ('Using single GPU training.')
     else:
         pass
-    args = parse_config()
     device = torch.device('cuda')
+    
+    args = parse_config()
 
     print('Loading tokenizer')
     tokenizer = load_tokenizer(args.model_name)
