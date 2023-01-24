@@ -54,14 +54,20 @@ class RecipeGenerator(nn.Module):
     #     logits = outputs.logits
     #     return last_hidden_states, logits
 
-    def forward(self, input_ids, attention_mask, labels, margin):
+    def forward(self, input_ids, attention_mask, margin):
         bsz, seqlen = input_ids.size()
-        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True, return_dict=True)
+        outputs = self.model(input_ids=input_ids, 
+                            attention_mask=attention_mask, 
+                            labels=input_ids,
+                            output_hidden_states=True, 
+                            return_dict=True
+                            )
         logits = outputs.logits
         assert logits.size() == torch.Size([bsz, seqlen, self.vocab_size])
         last_hidden_states = outputs.hidden_states[-1]
         assert last_hidden_states.size() == torch.Size([bsz, seqlen, self.embed_dim])
-        mle_loss = train_fct(logits.view(-1, self.vocab_size), labels.view(-1))
+        # mle_loss = train_fct(logits.view(-1, self.vocab_size), labels.view(-1))
+        mle_loss = outputs.loss
 
         norm_rep = last_hidden_states / last_hidden_states.norm(dim=2, keepdim=True)
         cosine_scores = torch.matmul(norm_rep, norm_rep.transpose(1,2)) 

@@ -39,7 +39,7 @@ def eval_model(args, model, data_loader, device):
             if args.cuda_available:
                 batch_input_ids = batch['input_ids'].cuda(device)
                 batch_attention_mask = batch['attention_mask'].cuda(device)
-                batch_labels = batch['labels'].cuda(device)
+                # batch_labels = batch['labels'].cuda(device)
 
             # batch_input_tensor, batch_labels, _ = \
             # # data.get_next_validation_batch(batch_size=dataset_batch_size, mode='test')
@@ -48,7 +48,7 @@ def eval_model(args, model, data_loader, device):
             #     batch_labels = batch_labels.cuda(device)
             # one_val_loss, one_val_token_sum = model.eval_loss(batch_input_tensor, batch_labels)
 
-            mle_loss, cl_loss = model(batch_input_ids, batch_attention_mask, batch_labels, args.margin)
+            mle_loss, cl_loss = model(batch_input_ids, batch_attention_mask, args.margin)
             mle_loss_total += mle_loss.mean().item()
             cl_loss_total += cl_loss.mean().item()
 
@@ -101,9 +101,9 @@ def model_training(train_dataset, valid_dataset, model, device, args):
             if args.cuda_available:
                 batch_input_ids = batch['input_ids'].cuda(device)
                 batch_attention_mask = batch['attention_mask'].cuda(device)
-                batch_labels = batch['labels'].cuda(device)
+                # batch_labels = batch['labels'].cuda(device)
 
-            mle_loss, cl_loss = model(batch_input_ids, batch_attention_mask, batch_labels, args.margin)
+            mle_loss, cl_loss = model(batch_input_ids, batch_attention_mask, args.margin)
             loss = mle_loss + cl_loss
             loss = loss.mean()
             loss.backward()
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     else:
         pass
     device = torch.device('cuda')
-    
+
     args = parse_config()
 
     print('Loading tokenizer')
