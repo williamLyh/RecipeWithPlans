@@ -1,7 +1,5 @@
 from collections import Counter
 import numpy as np
-
-# sys.path.append('/mnt/nas_home/yl535/decoding_with_plan')
 from dataset_preparation import automatic_stage_tagging_sentence_level
 from tqdm import tqdm
 import sys
@@ -63,6 +61,18 @@ class RecipeInferenceDataset(Dataset):
         encoding['reference_text'] = reference_text
         encoding['stage_label'] = self.stage_label[idx]
         return encoding
+
+def extract_instruction(text, return_list=False):
+    text =  text.split('<INSTR_START> ')[1].split('<INSTR_END>')[0].strip()
+    stage_separation_tokens = ['<INSTR_NEXT>']
+    text_list = None
+    if return_list:
+        pattern = '|'.join([token+' ' for token in stage_separation_tokens])
+        text_list = re.split(pattern, text) if text != '' else []
+    
+    for token in stage_separation_tokens:
+        text = text.replace(token, '')
+    return text, text_list
 
 ##################################################################
 ## Plan Accuracy

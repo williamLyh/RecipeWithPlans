@@ -98,7 +98,7 @@ class RecipeGenerator(nn.Module):
             context_range = len(generated[0])
             for step in range(max_length):
                 # print('current stage: {}'.format(stage_plan[stage_idx]))
-                generated_context = generated[0][max(context_range, last_hidden_states.size()[1]-10):] if last_hidden_states!=None else generated[0][context_range:]
+                generated_context = generated[0][max(context_range, last_hidden_states.size()[1]-30):] if last_hidden_states!=None else generated[0][context_range:]
                 input_ids, past_key_values, last_hidden_states, logits = self.decoding_one_step(
                     input_ids,
                     beam_width,
@@ -252,6 +252,7 @@ class RecipeGenerator(nn.Module):
 
 class StageClassifierModule():
     def __init__(self, classifier_path, device):
+        '''This module is eval mod by default'''
         self.bert_tokenizer = AutoTokenizer.from_pretrained(classifier_path)
 
         bert_classifier = AutoModelForSequenceClassification.from_pretrained(classifier_path, 
