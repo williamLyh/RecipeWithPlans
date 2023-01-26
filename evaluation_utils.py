@@ -176,8 +176,7 @@ def remove_substring_ingr(ingr_list):
     return ingr_list
 
 def calculate_ingredient_coverage_and_hallucination(input_text, generated_text, ingredient_dir):
-    ingredient_dir = '/mnt/nas_home/yl535/RecipeGeneration/'
-    with open(ingredient_dir+"ingredient_set.json", "r") as fp:
+    with open(ingredient_dir, "r") as fp:
         ingredient_set = json.load(fp)
 
     # Calculate coverage 
@@ -187,7 +186,7 @@ def calculate_ingredient_coverage_and_hallucination(input_text, generated_text, 
         # extract ingredients from input textual gredient
         ingredient_list = []
         for ingr in ingredient_set:
-            if ingr in input_line.split('Ingredients: ')[1].split(' Instructions:')[0]:
+            if ingr in input_line.split('<INGR_START>')[-1].split('<INGR_END>')[0]:
                 ingredient_list.append(ingr)
         ingredient_list = sorted(ingredient_list,key=len)   
         ingredient_list = remove_substring_ingr(ingredient_list)
@@ -225,7 +224,6 @@ def calculate_ingredient_coverage_and_hallucination(input_text, generated_text, 
     coverage_percentage = np.average(coverage_percentage_buffer)
     hallucination_percentage = np.average(hallucination_percentage_buffer)
     print('Coverage: {}. Hallucination: {}'.format(coverage_percentage, hallucination_percentage))
-
 
 
 
