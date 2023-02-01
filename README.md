@@ -76,3 +76,6 @@ python3 stage_planner.py --preprocessed_data_path='PATH_TO_PREPROCESSED_RECIPE1M
                         --predict=True \
                         --batch_size=256 \
 ```
+
+## Evaluation Examples
+The evaluation results are shown in evaluation.ipynb
