@@ -120,13 +120,12 @@ def n_gram_match_rate(predict_seq, reference_seq, ngram=1):
     else:
         print('Wrong n-gram number. ')
 
-
     average_match_rate = []
     for ngram1, ngram2 in zip(reference_ngram, prediction_ngram):
         ngram1_cnt = Counter(ngram1)
         ngram2_cnt = Counter(ngram2)
         match_cnt = 0
-        for unigram in ngram2_cnt.keys():
+        for ngram in ngram2_cnt.keys():
             if ngram in ngram1_cnt:
                 # print(bigram1_cnt[bigram],bigram2_cnt[bigram])
                 # print(min(bigram1_cnt[bigram], bigram2_cnt[bigram]))

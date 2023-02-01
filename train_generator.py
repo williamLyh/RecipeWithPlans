@@ -171,7 +171,7 @@ def parse_config():
         help="how many update steps to eval one model")
     # learning configuration
     parser.add_argument("--lr", type=float, default=8e-5)
-    parser.add_argument("--margin", type=float, default=0.5)
+    parser.add_argument("--margin", type=float, default=0)
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     return parser.parse_args()
 

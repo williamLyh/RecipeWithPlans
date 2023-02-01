@@ -176,10 +176,7 @@ def process_dataset(df, with_stage_label=False, with_image=False):
         dataset['stage_label'] = doc_labels   
     return dataset
 
-#####################################################################################
-# Generate stage Bag-Of-Words
-#####################################################################################
-    
+
 def verb_to_label(w):
     # {'preprocessing_vocab':1, 'mixing_vocab':2, 'moving_vocab':3, 'cooking_vocab':4, 'postprocessing_vocab':5, 'final_vocab':6, 'unlabelled':0}
     label = 0
