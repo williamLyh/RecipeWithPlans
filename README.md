@@ -1,7 +1,15 @@
 # Plug-and-Play Recipe Generation with Content Planning
 This repo contains code and model checkpoints of our EMNLP 2023 GEM Workshop paper:  
 Yinhong Liu, Yixuan Su, Ehsan Shareghi and Nigel Collier [**"Plug-and-Play Recipe Generation with Content Planning"**](https://arxiv.org/pdf/2212.05093.pdf).  
-If you hae any questions, please contact Yinhong via yl535 at cam.ac.uk.
+If you hae any questions, please contact Yinhong via yl535 at cam.ac.uk. If you find our paper and resources useful, please kindly leave a star and cite our papers. Thanks!
+```
+@article{liu2022plug,
+  title={Plug-and-Play Recipe Generation with Content Planning},
+  author={Liu, Yinhong and Su, Yixuan and Shareghi, Ehsan and Collier, Nigel},
+  journal={arXiv preprint arXiv:2212.05093},
+  year={2022}
+}
+```
 
 ---
 ## Generator, Classifier and Planner
